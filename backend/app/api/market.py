@@ -48,21 +48,23 @@ def forecast(ticker: str, horizon: int = Query(30, ge=7, le=180), with_ai: bool 
     try:
         result = forecasting.get_forecast(ticker.upper(), horizon)
         if with_ai:
-            last = result.forecast[-1] if result.forecast else None
-            hist_last = result.historical[-1] if result.historical else None
-            if last and hist_last:
-                move_pct = (last.predicted - hist_last.close) / hist_last.close * 100
-                mape = result.metrics.get("mape")
-                commentary = ai_insights.get_forecast_commentary(
-                    ticker=ticker.upper(),
-                    model=result.model,
-                    horizon_days=horizon,
-                    predicted_price=last.predicted,
-                    current_price=hist_last.close,
-                    expected_move_pct=move_pct,
-                    mape=float(mape) if mape is not None else None,
-                )
-                result.ai_commentary = commentary
+            try:
+                last = result.forecast[-1] if result.forecast else None
+                hist_last = result.historical[-1] if result.historical else None
+                if last and hist_last:
+                    move_pct = (last.predicted - hist_last.close) / hist_last.close * 100
+                    mape = result.metrics.get("mape")
+                    result.ai_commentary = ai_insights.get_forecast_commentary(
+                        ticker=ticker.upper(),
+                        model=result.model,
+                        horizon_days=horizon,
+                        predicted_price=last.predicted,
+                        current_price=hist_last.close,
+                        expected_move_pct=move_pct,
+                        mape=float(mape) if mape is not None else None,
+                    )
+            except Exception:
+                result.ai_commentary = None
         return result
     except ValueError as e:
         raise HTTPException(400, str(e))

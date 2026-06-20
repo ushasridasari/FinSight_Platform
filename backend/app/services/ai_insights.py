@@ -24,7 +24,9 @@ def _client() -> anthropic.Anthropic:
 
 
 def _ai_available() -> bool:
-    return bool(settings.anthropic_api_key)
+    key = settings.anthropic_api_key
+    # Reject empty or placeholder values
+    return bool(key) and not key.startswith("your_") and key.startswith("sk-")
 
 
 def _ask(prompt: str, max_tokens: int = 600) -> str:
