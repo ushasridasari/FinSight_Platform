@@ -1,6 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
-from datetime import date
+from typing import List, Optional, Any
 
 
 class OHLCV(BaseModel):
@@ -40,6 +39,7 @@ class ForecastResponse(BaseModel):
     historical: List[OHLCV]
     forecast: List[ForecastPoint]
     metrics: dict
+    ai_commentary: Optional[dict] = None
 
 
 class RiskMetrics(BaseModel):
@@ -75,3 +75,33 @@ class AIInsightResponse(BaseModel):
     key_factors: List[str]
     risk_level: str
     recommendation: str
+
+
+class MarketSummaryResponse(BaseModel):
+    headline: str
+    key_themes: List[str]
+    sector_outlook: List[Any]
+    market_mood: str
+    watch_today: List[str]
+
+
+class WatchlistScoreItem(BaseModel):
+    ticker: str
+    score: Any
+    label: str
+    action: str
+    reason: str
+
+
+class PortfolioAIRequest(BaseModel):
+    holdings: List[dict]
+
+
+class ForecastCommentaryRequest(BaseModel):
+    ticker: str
+    model: str
+    horizon_days: int
+    predicted_price: float
+    current_price: float
+    expected_move_pct: float
+    mape: Optional[float] = None

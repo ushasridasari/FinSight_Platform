@@ -1,11 +1,11 @@
 """
 Time-series forecasting service.
 Uses Facebook Prophet for price prediction with uncertainty intervals.
-Falls back to a simple linear regression when Prophet is unavailable.
+Falls back to polynomial regression when Prophet is unavailable.
 """
 import pandas as pd
 import numpy as np
-from typing import List, Tuple
+from typing import List
 from datetime import timedelta
 
 from ..schemas.market import ForecastPoint, ForecastResponse, OHLCV
@@ -13,7 +13,6 @@ from .market_data import get_ohlcv_dataframe, get_ohlcv
 
 
 def _compute_forecast_metrics(actual: pd.Series, predicted: pd.Series) -> dict:
-    """MAPE and RMSE on the last in-sample overlap."""
     n = min(len(actual), len(predicted), 30)
     if n == 0:
         return {"mape": None, "rmse": None}
@@ -46,10 +45,9 @@ def forecast_with_prophet(ticker: str, horizon_days: int = 30) -> ForecastRespon
     )
     model.fit(prophet_df)
 
-    future = model.make_future_dataframe(periods=horizon_days, freq="B")  # business days
+    future = model.make_future_dataframe(periods=horizon_days, freq="B")
     forecast_df = model.predict(future)
 
-    # Separate historical fit from forward forecast
     last_hist_date = prophet_df["ds"].max()
     fwd = forecast_df[forecast_df["ds"] > last_hist_date].tail(horizon_days)
 
@@ -63,10 +61,7 @@ def forecast_with_prophet(ticker: str, horizon_days: int = 30) -> ForecastRespon
         ))
 
     in_sample = forecast_df[forecast_df["ds"] <= last_hist_date]
-    metrics = _compute_forecast_metrics(
-        prophet_df["y"],
-        in_sample["yhat"],
-    )
+    metrics = _compute_forecast_metrics(prophet_df["y"], in_sample["yhat"])
     metrics["model"] = "Prophet"
 
     historical = get_ohlcv(ticker, period="6mo")
@@ -82,10 +77,6 @@ def forecast_with_prophet(ticker: str, horizon_days: int = 30) -> ForecastRespon
 
 
 def forecast_with_linear(ticker: str, horizon_days: int = 30) -> ForecastResponse:
-    """
-    Fallback: polynomial regression on closing price with rolling volatility
-    used to build confidence bounds.
-    """
     from sklearn.preprocessing import PolynomialFeatures
     from sklearn.linear_model import Ridge
     from sklearn.pipeline import Pipeline
@@ -125,12 +116,11 @@ def forecast_with_linear(ticker: str, horizon_days: int = 30) -> ForecastRespons
         model="PolynomialRegression",
         historical=historical,
         forecast=forecast_points,
-        metrics={"model": "PolynomialRegression", "note": "fallback — Prophet not available"},
+        metrics={"model": "PolynomialRegression", "mape": None, "rmse": None},
     )
 
 
 def get_forecast(ticker: str, horizon_days: int = 30) -> ForecastResponse:
-    """Entry point — tries Prophet first, falls back gracefully."""
     try:
         return forecast_with_prophet(ticker, horizon_days)
     except Exception:
