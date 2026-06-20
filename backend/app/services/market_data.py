@@ -4,8 +4,15 @@ Fetches quotes, OHLCV history, and fundamental info.
 """
 import yfinance as yf
 import pandas as pd
-from typing import List, Optional
+from typing import List
 from ..schemas.market import StockQuote, OHLCV
+
+
+def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Flatten MultiIndex columns produced by newer yfinance versions."""
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = [col[0] for col in df.columns]
+    return df
 
 
 def get_stock_quote(ticker: str) -> StockQuote:
@@ -42,6 +49,8 @@ def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d") -> List[OHL
     if df.empty:
         return []
 
+    df = _flatten_columns(df)
+
     result = []
     for idx, row in df.iterrows():
         result.append(OHLCV(
@@ -57,7 +66,7 @@ def get_ohlcv(ticker: str, period: str = "1y", interval: str = "1d") -> List[OHL
 
 def get_ohlcv_dataframe(ticker: str, period: str = "2y") -> pd.DataFrame:
     df = yf.download(ticker, period=period, interval="1d", progress=False, auto_adjust=True)
-    df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
+    df = _flatten_columns(df)
     df.index = pd.to_datetime(df.index)
     return df.dropna()
 
