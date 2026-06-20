@@ -99,4 +99,4 @@ ENVIRONMENT=development
 
 ## Author
 
-**Ushasri Dasari** — MS Computer Science
+**Ushasri Dasari** — MS Software Engineering
