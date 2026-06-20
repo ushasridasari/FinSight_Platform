@@ -1,14 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
-import { TrendingUp, TrendingDown, DollarSign, Activity } from 'lucide-react'
+import { TrendingUp, TrendingDown, Newspaper, Eye } from 'lucide-react'
 import { marketService } from '../services/market'
 import KPICard from '../components/ui/KPICard'
 import Card from '../components/ui/Card'
 import PriceChart from '../components/charts/PriceChart'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
+import AIPanel from '../components/ui/AIPanel'
 
 const INDEX_TICKERS = ['SPY', 'QQQ', 'DIA', 'IWM']
-const WATCHLIST_DEFAULT = ['AAPL', 'MSFT', 'NVDA', 'TSLA', 'GOOGL', 'AMZN']
+
+const moodColor: Record<string, string> = {
+  'Risk-On':  'text-brand-400',
+  'Risk-Off': 'text-red-400',
+  'Cautious': 'text-yellow-400',
+  'Mixed':    'text-blue-400',
+}
 
 export default function DashboardPage() {
   const { data: movers, isLoading: loadMovers } = useQuery({
@@ -29,6 +36,14 @@ export default function DashboardPage() {
     staleTime: 300_000,
   })
 
+  // AI daily market summary
+  const { data: aiSummary, isLoading: loadAI } = useQuery({
+    queryKey: ['ai-market-summary'],
+    queryFn: marketService.getMarketSummary,
+    staleTime: 600_000,
+    retry: false,
+  })
+
   const gainers = movers?.gainers ?? []
   const losers  = movers?.losers  ?? []
 
@@ -36,8 +51,68 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-white">Market Overview</h1>
-        <p className="text-slate-400 text-sm mt-0.5">Real-time snapshot — refreshes every minute</p>
+        <p className="text-slate-400 text-sm mt-0.5">Real-time snapshot · AI-powered briefing</p>
       </div>
+
+      {/* AI Daily Briefing */}
+      <AIPanel title="AI Daily Market Briefing" loading={loadAI}>
+        {loadAI ? (
+          <p className="text-slate-400 text-sm">Generating today's market analysis…</p>
+        ) : aiSummary ? (
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <p className="text-white font-medium text-base leading-relaxed flex-1">{aiSummary.headline}</p>
+              <span className={`text-sm font-bold ${moodColor[aiSummary.market_mood] ?? 'text-slate-300'}`}>
+                {aiSummary.market_mood}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Key themes */}
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Newspaper size={11} /> Key Themes
+                </p>
+                <ul className="space-y-1">
+                  {(aiSummary.key_themes ?? []).map((t: string, i: number) => (
+                    <li key={i} className="text-sm text-slate-300 flex items-start gap-1.5">
+                      <span className="text-brand-400 mt-0.5">·</span>{t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Sector outlook */}
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Sector Outlook</p>
+                <div className="space-y-1.5">
+                  {(aiSummary.sector_outlook ?? []).slice(0, 4).map((s: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-300">{s.sector}</span>
+                      <Badge label={s.outlook}
+                        variant={s.outlook === 'Bullish' ? 'green' : s.outlook === 'Bearish' ? 'red' : 'yellow'} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Watch today */}
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <Eye size={11} /> Watch Today
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {(aiSummary.watch_today ?? []).map((w: string, i: number) => (
+                    <Badge key={i} label={w} variant="blue" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-slate-500 text-sm">AI summary unavailable — check your ANTHROPIC_API_KEY.</p>
+        )}
+      </AIPanel>
 
       {/* Index KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -101,7 +176,7 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* All quotes table */}
+      {/* Quotes table */}
       <Card padding={false}>
         <div className="p-5 border-b border-surface-border">
           <h2 className="font-semibold text-white">Notable Stocks</h2>

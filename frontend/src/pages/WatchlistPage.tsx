@@ -1,16 +1,24 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Star, Plus, Trash2, TrendingUp, TrendingDown } from 'lucide-react'
+import { Star, Plus, Trash2, TrendingUp, TrendingDown, BrainCircuit } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { portfolioService } from '../services/portfolio'
 import { marketService } from '../services/market'
 import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
+import AIPanel from '../components/ui/AIPanel'
+
+const actionVariant = (a: string): 'green' | 'yellow' | 'red' | 'gray' =>
+  a === 'Buy' ? 'green' : a === 'Sell' ? 'red' : a === 'Hold' ? 'yellow' : 'gray'
+
+const labelVariant = (l: string): 'green' | 'red' | 'yellow' | 'gray' =>
+  l === 'Bullish' ? 'green' : l === 'Bearish' ? 'red' : 'yellow'
 
 export default function WatchlistPage() {
   const qc = useQueryClient()
-  const [input, setInput] = useState('')
+  const [input,  setInput]  = useState('')
+  const [showAI, setShowAI] = useState(false)
 
   const { data: watchlist, isLoading } = useQuery({
     queryKey: ['watchlist'],
@@ -26,6 +34,15 @@ export default function WatchlistPage() {
     staleTime: 30_000,
   })
 
+  // AI batch scoring
+  const { data: aiScores, isLoading: loadAI } = useQuery({
+    queryKey: ['wl-ai-scores', tickers.join(',')],
+    queryFn: () => marketService.getWatchlistScores(tickers),
+    enabled: showAI && tickers.length > 0,
+    staleTime: 600_000,
+    retry: false,
+  })
+
   const add = useMutation({
     mutationFn: (ticker: string) => portfolioService.addToWatchlist(ticker),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['watchlist'] }); setInput('') },
@@ -37,13 +54,23 @@ export default function WatchlistPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['watchlist'] }),
   })
 
-  const quoteMap = Object.fromEntries((quotes ?? []).map((q) => [q.ticker, q]))
+  const quoteMap  = Object.fromEntries((quotes  ?? []).map((q) => [q.ticker, q]))
+  const scoreMap  = Object.fromEntries((aiScores ?? []).map((s: any) => [s.ticker, s]))
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <Star size={22} className="text-yellow-400" />
-        <h1 className="text-2xl font-bold text-white">Watchlist</h1>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <Star size={22} className="text-yellow-400" />
+          <h1 className="text-2xl font-bold text-white">Watchlist</h1>
+        </div>
+        {tickers.length > 0 && (
+          <button onClick={() => setShowAI((v) => !v)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 text-sm font-medium transition-colors">
+            <BrainCircuit size={15} />
+            {showAI ? 'Hide AI Scores' : 'AI Score All'}
+          </button>
+        )}
       </div>
 
       {/* Add ticker */}
@@ -55,15 +82,41 @@ export default function WatchlistPage() {
             placeholder="Add ticker e.g. GOOG" />
           <button type="submit" disabled={add.isPending}
             className="px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg flex items-center gap-1.5 transition-colors">
-            <Plus size={15} /> Add to Watchlist
+            <Plus size={15} /> Add
           </button>
         </form>
       </Card>
 
+      {/* AI scoring panel */}
+      {showAI && tickers.length > 0 && (
+        <AIPanel title="AI Watchlist Scoring" loading={loadAI}>
+          {loadAI ? (
+            <p className="text-slate-400 text-sm">Claude is scoring all {tickers.length} tickers…</p>
+          ) : aiScores && aiScores.length > 0 ? (
+            <div className="space-y-2">
+              {(aiScores as any[]).map((s) => (
+                <div key={s.ticker} className="flex items-center gap-4 bg-surface/50 rounded-lg px-4 py-3">
+                  <span className="font-mono font-bold text-white w-14">{s.ticker}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-2xl font-bold text-white">{s.score}</span>
+                    <span className="text-slate-400 text-xs">/10</span>
+                  </div>
+                  <Badge label={s.label}  variant={labelVariant(s.label)} />
+                  <Badge label={s.action} variant={actionVariant(s.action)} />
+                  <span className="text-slate-300 text-xs flex-1">{s.reason}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">AI scoring unavailable — check ANTHROPIC_API_KEY.</p>
+          )}
+        </AIPanel>
+      )}
+
       {/* Watchlist table */}
       {isLoading ? <Spinner /> : (
         <Card padding={false}>
-          {(watchlist ?? []).length === 0 ? (
+          {tickers.length === 0 ? (
             <p className="text-slate-400 text-sm py-12 text-center">Your watchlist is empty — add a ticker above</p>
           ) : (
             <table className="w-full text-sm">

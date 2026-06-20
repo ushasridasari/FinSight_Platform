@@ -1,19 +1,32 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, RefreshCw, BrainCircuit } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { portfolioService } from '../services/portfolio'
+import { marketService } from '../services/market'
 import Card from '../components/ui/Card'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
 import AllocationChart from '../components/charts/AllocationChart'
+import AIPanel from '../components/ui/AIPanel'
 import type { PortfolioValuation } from '../types'
+
+const healthColor: Record<string, string> = {
+  Excellent: 'text-brand-400',
+  Good:      'text-blue-400',
+  Fair:      'text-yellow-400',
+  Poor:      'text-red-400',
+}
+
+const actionVariant = (a: string): 'green' | 'red' | 'yellow' | 'gray' =>
+  a === 'Buy more' ? 'green' : a === 'Trim' || a === 'Exit' ? 'red' : a === 'Hold' ? 'yellow' : 'gray'
 
 export default function PortfolioPage() {
   const qc = useQueryClient()
-  const [newPortName, setNewPortName] = useState('')
-  const [selectedId, setSelectedId]   = useState<number | null>(null)
-  const [showAddHolding, setShowAddHolding] = useState(false)
+  const [newPortName,     setNewPortName]     = useState('')
+  const [selectedId,      setSelectedId]      = useState<number | null>(null)
+  const [showAddHolding,  setShowAddHolding]  = useState(false)
+  const [showAI,          setShowAI]          = useState(false)
   const [holding, setHolding] = useState({ ticker: '', shares: '', avg_cost: '', sector: '' })
 
   const { data: portfolios, isLoading } = useQuery({
@@ -28,6 +41,17 @@ export default function PortfolioPage() {
     staleTime: 30_000,
   })
 
+  const val: PortfolioValuation | undefined = valuation as PortfolioValuation | undefined
+
+  // AI portfolio health — triggered when user clicks "AI Analysis"
+  const { data: aiHealth, isLoading: loadAI } = useQuery({
+    queryKey: ['portfolio-ai', selectedId],
+    queryFn: () => marketService.getPortfolioAIAnalysis(val!.holdings),
+    enabled: showAI && val != null && val.holdings.length > 0,
+    staleTime: 600_000,
+    retry: false,
+  })
+
   const createPort = useMutation({
     mutationFn: (name: string) => portfolioService.create(name),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['portfolios'] }); setNewPortName('') },
@@ -36,17 +60,18 @@ export default function PortfolioPage() {
 
   const deletePort = useMutation({
     mutationFn: portfolioService.delete,
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['portfolios'] }); if (selectedId) setSelectedId(null) },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['portfolios'] }); setSelectedId(null) },
   })
 
   const addHolding = useMutation({
     mutationFn: () => portfolioService.addHolding(
-      selectedId!, holding.ticker.toUpperCase(), parseFloat(holding.shares),
-      parseFloat(holding.avg_cost), holding.sector || undefined
+      selectedId!, holding.ticker.toUpperCase(),
+      parseFloat(holding.shares), parseFloat(holding.avg_cost), holding.sector || undefined
     ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['valuation', selectedId] })
       qc.invalidateQueries({ queryKey: ['portfolios'] })
+      qc.invalidateQueries({ queryKey: ['portfolio-ai', selectedId] })
       setHolding({ ticker: '', shares: '', avg_cost: '', sector: '' })
       setShowAddHolding(false)
       toast.success('Holding added')
@@ -56,25 +81,28 @@ export default function PortfolioPage() {
 
   const removeHolding = useMutation({
     mutationFn: (holdingId: number) => portfolioService.removeHolding(selectedId!, holdingId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['valuation', selectedId] }); toast.success('Holding removed') },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['valuation', selectedId] })
+      qc.invalidateQueries({ queryKey: ['portfolio-ai', selectedId] })
+      toast.success('Holding removed')
+    },
   })
-
-  const val: PortfolioValuation | undefined = valuation as PortfolioValuation | undefined
 
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-white">Portfolio Manager</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar — portfolios list */}
+        {/* Sidebar */}
         <div className="lg:col-span-1 space-y-3">
           <Card>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">My Portfolios</p>
             {isLoading ? <Spinner className="p-4" /> : (
               <div className="space-y-1.5">
                 {(portfolios ?? []).map((p) => (
-                  <div key={p.id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${selectedId === p.id ? 'bg-brand-500/20 text-brand-400' : 'text-slate-300 hover:bg-white/5'}`}
-                    onClick={() => setSelectedId(p.id)}>
+                  <div key={p.id}
+                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${selectedId === p.id ? 'bg-brand-500/20 text-brand-400' : 'text-slate-300 hover:bg-white/5'}`}
+                    onClick={() => { setSelectedId(p.id); setShowAI(false) }}>
                     <span className="text-sm font-medium truncate">{p.name}</span>
                     <button onClick={(e) => { e.stopPropagation(); deletePort.mutate(p.id) }}
                       className="text-slate-500 hover:text-red-400 transition-colors ml-2">
@@ -87,7 +115,6 @@ export default function PortfolioPage() {
                 )}
               </div>
             )}
-            {/* Create portfolio */}
             <div className="mt-4 border-t border-surface-border pt-4">
               <input value={newPortName} onChange={(e) => setNewPortName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && newPortName.trim()) createPort.mutate(newPortName.trim()) }}
@@ -101,7 +128,7 @@ export default function PortfolioPage() {
           </Card>
         </div>
 
-        {/* Main content */}
+        {/* Main */}
         <div className="lg:col-span-3 space-y-6">
           {!selectedId ? (
             <Card>
@@ -112,10 +139,10 @@ export default function PortfolioPage() {
               {/* KPIs */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Value',   value: `$${val.total_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}` },
-                  { label: 'Total Cost',    value: `$${val.total_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}` },
-                  { label: 'Total P&L',     value: `${val.total_pnl >= 0 ? '+' : ''}$${val.total_pnl.toFixed(2)}` },
-                  { label: 'Return %',      value: `${val.total_pnl_pct >= 0 ? '+' : ''}${val.total_pnl_pct.toFixed(2)}%` },
+                  { label: 'Total Value', value: `$${val.total_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}` },
+                  { label: 'Total Cost',  value: `$${val.total_cost.toLocaleString('en-US', { minimumFractionDigits: 2 })}` },
+                  { label: 'Total P&L',   value: `${val.total_pnl >= 0 ? '+' : ''}$${val.total_pnl.toFixed(2)}` },
+                  { label: 'Return %',    value: `${val.total_pnl_pct >= 0 ? '+' : ''}${val.total_pnl_pct.toFixed(2)}%` },
                 ].map(({ label, value }) => (
                   <div key={label} className="bg-surface-card border border-surface-border rounded-xl p-4">
                     <p className="text-xs text-slate-400">{label}</p>
@@ -125,6 +152,72 @@ export default function PortfolioPage() {
                   </div>
                 ))}
               </div>
+
+              {/* AI Analysis toggle */}
+              <div className="flex justify-end">
+                <button onClick={() => setShowAI((v) => !v)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-brand-500/40 text-brand-400 hover:bg-brand-500/10 text-sm font-medium transition-colors">
+                  <BrainCircuit size={15} />
+                  {showAI ? 'Hide AI Analysis' : 'Run AI Portfolio Analysis'}
+                </button>
+              </div>
+
+              {/* AI Portfolio Health */}
+              {showAI && (
+                <AIPanel title="AI Portfolio Health Check" loading={loadAI}>
+                  {loadAI ? (
+                    <p className="text-slate-400 text-sm">Analyzing your portfolio with Claude…</p>
+                  ) : aiHealth ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-slate-400 font-medium">Overall Health</span>
+                        <span className={`font-bold text-base ${healthColor[aiHealth.overall_health] ?? 'text-white'}`}>
+                          {aiHealth.overall_health}
+                        </span>
+                      </div>
+                      <p className="text-white text-sm leading-relaxed">{aiHealth.summary}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs font-semibold text-brand-400 uppercase tracking-wider mb-2">Strengths</p>
+                          <ul className="space-y-1">
+                            {(aiHealth.strengths ?? []).map((s: string, i: number) => (
+                              <li key={i} className="text-slate-300 text-xs flex items-start gap-1.5">
+                                <span className="text-brand-400 mt-0.5">✓</span>{s}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-red-400 uppercase tracking-wider mb-2">Risks</p>
+                          <ul className="space-y-1">
+                            {(aiHealth.risks ?? []).map((r: string, i: number) => (
+                              <li key={i} className="text-slate-300 text-xs flex items-start gap-1.5">
+                                <span className="text-red-400 mt-0.5">!</span>{r}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      {(aiHealth.rebalancing_suggestions ?? []).length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Rebalancing Suggestions</p>
+                          <div className="space-y-2">
+                            {aiHealth.rebalancing_suggestions.map((s: any, i: number) => (
+                              <div key={i} className="flex items-center gap-3 bg-surface/50 rounded-lg px-3 py-2">
+                                <span className="font-mono font-bold text-white text-sm w-14">{s.ticker}</span>
+                                <Badge label={s.action} variant={actionVariant(s.action)} />
+                                <span className="text-slate-300 text-xs flex-1">{s.reason}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-sm">AI analysis unavailable — check ANTHROPIC_API_KEY.</p>
+                  )}
+                </AIPanel>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Holdings table */}
@@ -146,10 +239,10 @@ export default function PortfolioPage() {
                   {showAddHolding && (
                     <div className="p-4 border-b border-surface-border bg-surface/50 grid grid-cols-2 gap-2">
                       {[
-                        { ph: 'TICKER', key: 'ticker' },
-                        { ph: 'Shares', key: 'shares' },
+                        { ph: 'TICKER',     key: 'ticker'   },
+                        { ph: 'Shares',     key: 'shares'   },
                         { ph: 'Avg Cost ($)', key: 'avg_cost' },
-                        { ph: 'Sector (opt)', key: 'sector' },
+                        { ph: 'Sector (opt)', key: 'sector'   },
                       ].map(({ ph, key }) => (
                         <input key={key} placeholder={ph}
                           value={holding[key as keyof typeof holding]}
@@ -167,13 +260,13 @@ export default function PortfolioPage() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-slate-500 border-b border-surface-border">
-                          {['Ticker', 'Shares', 'Avg Cost', 'Price', 'P&L', '%', 'Weight', ''].map((h) => (
+                          {['Ticker', 'Shares', 'Avg', 'Price', 'P&L', '%', 'Wt', ''].map((h) => (
                             <th key={h} className="px-3 py-2 text-left font-medium">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-surface-border">
-                        {val.holdings.filter((h) => !('error' in h)).map((h: any) => (
+                        {val.holdings.filter((h: any) => !('error' in h)).map((h: any) => (
                           <tr key={h.id} className="hover:bg-white/5">
                             <td className="px-3 py-2 font-mono font-bold text-white">{h.ticker}</td>
                             <td className="px-3 py-2 text-slate-300">{h.shares}</td>

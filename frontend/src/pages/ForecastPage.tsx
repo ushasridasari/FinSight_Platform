@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Info } from 'lucide-react'
+import { Search, Info, ShieldAlert, KeyRound } from 'lucide-react'
 import { marketService } from '../services/market'
 import Card from '../components/ui/Card'
 import ForecastChart from '../components/charts/ForecastChart'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
+import AIPanel from '../components/ui/AIPanel'
 
 const HORIZONS = [7, 14, 30, 60, 90] as const
+
+const confidenceVariant = (c: string): 'green' | 'yellow' | 'red' =>
+  c === 'High' ? 'green' : c === 'Medium' ? 'yellow' : 'red'
 
 export default function ForecastPage() {
   const [ticker, setTicker]   = useState('AAPL')
@@ -16,7 +20,7 @@ export default function ForecastPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['forecast', ticker, horizon],
-    queryFn: () => marketService.getForecast(ticker, horizon),
+    queryFn: () => marketService.getForecast(ticker, horizon, true),
     staleTime: 600_000,
   })
 
@@ -26,23 +30,26 @@ export default function ForecastPage() {
   }
 
   const lastForecast = data?.forecast[data.forecast.length - 1]
-  const firstHist    = data?.historical[data.historical.length - 1]
-  const priceDelta   = lastForecast && firstHist
-    ? ((lastForecast.predicted - firstHist.close) / firstHist.close) * 100
+  const lastHist     = data?.historical[data.historical.length - 1]
+  const priceDelta   = lastForecast && lastHist
+    ? ((lastForecast.predicted - lastHist.close) / lastHist.close) * 100
     : null
+
+  const aiCommentary = data?.ai_commentary as any
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">AI Price Forecasting</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Prophet + polynomial regression with confidence intervals</p>
+          <p className="text-slate-400 text-sm mt-0.5">Prophet ML model · Claude commentary · Confidence intervals</p>
         </div>
         <form onSubmit={search} className="flex gap-2">
           <input value={input} onChange={(e) => setInput(e.target.value)}
             className="px-4 py-2 bg-surface-card border border-surface-border rounded-lg text-white text-sm focus:outline-none focus:border-brand-500 w-36"
             placeholder="TICKER" />
-          <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors">
+          <button type="submit"
+            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors">
             <Search size={15} /> Forecast
           </button>
         </form>
@@ -51,7 +58,7 @@ export default function ForecastPage() {
       {/* Horizon selector */}
       <Card>
         <div className="flex items-center gap-4 flex-wrap">
-          <span className="text-sm text-slate-400 font-medium">Forecast horizon:</span>
+          <span className="text-sm text-slate-400 font-medium">Horizon:</span>
           <div className="flex gap-2">
             {HORIZONS.map((h) => (
               <button key={h} onClick={() => setHorizon(h)}
@@ -62,12 +69,12 @@ export default function ForecastPage() {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-slate-500 ml-auto">
             <Info size={13} />
-            <span>Dashed line = forecast · Shaded = 80% confidence interval</span>
+            <span>Dashed = forecast · Shaded = 80% CI</span>
           </div>
         </div>
       </Card>
 
-      {/* Summary KPIs */}
+      {/* KPI row */}
       {data && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="bg-surface-card border border-surface-border rounded-xl p-4">
@@ -75,11 +82,11 @@ export default function ForecastPage() {
             <p className="text-xl font-bold text-white mt-1">{data.ticker}</p>
           </div>
           <div className="bg-surface-card border border-surface-border rounded-xl p-4">
-            <p className="text-xs text-slate-400">Model</p>
+            <p className="text-xs text-slate-400">ML Model</p>
             <p className="text-base font-semibold text-white mt-1">{data.model}</p>
           </div>
           <div className="bg-surface-card border border-surface-border rounded-xl p-4">
-            <p className="text-xs text-slate-400">Predicted (end of horizon)</p>
+            <p className="text-xs text-slate-400">Predicted ({horizon}d)</p>
             <p className="text-xl font-bold text-white mt-1">
               {lastForecast ? `$${lastForecast.predicted.toFixed(2)}` : '—'}
             </p>
@@ -110,7 +117,50 @@ export default function ForecastPage() {
         </div>
       </Card>
 
-      {/* Metrics */}
+      {/* AI Forecast Commentary */}
+      {data && (
+        <AIPanel title="AI Forecast Commentary">
+          {aiCommentary ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge label={`Confidence: ${aiCommentary.confidence}`}
+                  variant={confidenceVariant(aiCommentary.confidence)} />
+              </div>
+              <p className="text-white text-sm leading-relaxed">{aiCommentary.commentary}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <KeyRound size={11} /> Key Assumptions
+                  </p>
+                  <ul className="space-y-1">
+                    {(aiCommentary.key_assumptions ?? []).map((a: string, i: number) => (
+                      <li key={i} className="text-slate-300 text-xs flex items-start gap-1.5">
+                        <span className="text-brand-400 mt-0.5">·</span>{a}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <ShieldAlert size={11} /> Downside Risks
+                  </p>
+                  <ul className="space-y-1">
+                    {(aiCommentary.downside_risks ?? []).map((r: string, i: number) => (
+                      <li key={i} className="text-slate-300 text-xs flex items-start gap-1.5">
+                        <span className="text-red-400 mt-0.5">·</span>{r}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">AI commentary unavailable — check ANTHROPIC_API_KEY.</p>
+          )}
+        </AIPanel>
+      )}
+
+      {/* Model metrics */}
       {data?.metrics && (
         <Card>
           <h3 className="font-semibold text-white mb-4 text-sm">Model Metrics</h3>

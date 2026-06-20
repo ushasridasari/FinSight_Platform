@@ -6,10 +6,16 @@ import Card from '../components/ui/Card'
 import PriceChart from '../components/charts/PriceChart'
 import Spinner from '../components/ui/Spinner'
 import Badge from '../components/ui/Badge'
-import KPICard from '../components/ui/KPICard'
 import SentimentGauge from '../components/charts/SentimentGauge'
+import AIPanel from '../components/ui/AIPanel'
 
 const PERIODS = ['1mo', '3mo', '6mo', '1y', '2y', '5y'] as const
+
+const riskBadge = (r: string) =>
+  r === 'Low' ? 'green' : r === 'Medium' ? 'yellow' : 'red'
+
+const recBadge = (r: string): 'green' | 'yellow' | 'red' | 'gray' =>
+  r.includes('Buy') ? 'green' : r.includes('Sell') ? 'red' : r === 'Hold' ? 'yellow' : 'gray'
 
 export default function MarketPage() {
   const [ticker, setTicker] = useState('AAPL')
@@ -40,6 +46,14 @@ export default function MarketPage() {
     staleTime: 300_000,
   })
 
+  // AI stock insight — auto-fetched with each ticker
+  const { data: aiInsight, isLoading: loadAI } = useQuery({
+    queryKey: ['ai-insight', ticker],
+    queryFn: () => marketService.getAIInsight(ticker),
+    staleTime: 600_000,
+    retry: false,
+  })
+
   function search(e: React.FormEvent) {
     e.preventDefault()
     setTicker(input.toUpperCase().trim())
@@ -50,13 +64,14 @@ export default function MarketPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Stock Analysis</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Detailed price, risk, and sentiment data</p>
+          <p className="text-slate-400 text-sm mt-0.5">Price · Risk · Sentiment · AI Insight</p>
         </div>
         <form onSubmit={search} className="flex gap-2">
           <input value={input} onChange={(e) => setInput(e.target.value)}
             className="px-4 py-2 bg-surface-card border border-surface-border rounded-lg text-white text-sm focus:outline-none focus:border-brand-500 w-36"
             placeholder="TICKER" />
-          <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors">
+          <button type="submit"
+            className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm flex items-center gap-1.5 transition-colors">
             <Search size={15} /> Search
           </button>
         </form>
@@ -92,6 +107,32 @@ export default function MarketPage() {
         </Card>
       )}
 
+      {/* AI Stock Insight — auto-generated */}
+      <AIPanel title={`AI Analysis — ${ticker}`} loading={loadAI}>
+        {loadAI ? (
+          <p className="text-slate-400 text-sm">Analyzing {ticker} with Claude…</p>
+        ) : aiInsight ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge label={aiInsight.recommendation} variant={recBadge(aiInsight.recommendation)} />
+              <Badge label={`Risk: ${aiInsight.risk_level}`} variant={riskBadge(aiInsight.risk_level) as any} />
+            </div>
+            <p className="text-white text-sm leading-relaxed">{aiInsight.insight}</p>
+            {aiInsight.key_factors.length > 0 && (
+              <ul className="space-y-1">
+                {aiInsight.key_factors.map((f, i) => (
+                  <li key={i} className="text-slate-300 text-xs flex items-start gap-1.5">
+                    <span className="text-brand-400 mt-0.5">·</span>{f}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <p className="text-slate-500 text-sm">AI insight unavailable — check ANTHROPIC_API_KEY.</p>
+        )}
+      </AIPanel>
+
       {/* Price chart */}
       <Card padding={false}>
         <div className="p-5 border-b border-surface-border flex items-center justify-between">
@@ -119,14 +160,14 @@ export default function MarketPage() {
           {loadRisk ? <Spinner /> : risk ? (
             <div className="grid grid-cols-2 gap-4 p-5">
               {[
-                { label: 'Sharpe Ratio',     value: risk.sharpe_ratio.toFixed(3) },
-                { label: 'Ann. Return',      value: `${risk.annualized_return.toFixed(2)}%` },
-                { label: 'Ann. Volatility',  value: `${risk.annualized_volatility.toFixed(2)}%` },
-                { label: 'Max Drawdown',     value: `${risk.max_drawdown.toFixed(2)}%` },
-                { label: 'VaR 95%',          value: `${risk.var_95.toFixed(2)}%` },
-                { label: 'VaR 99%',          value: `${risk.var_99.toFixed(2)}%` },
-                { label: 'Beta',             value: risk.beta != null ? risk.beta.toFixed(3) : '—' },
-                { label: 'Alpha',            value: risk.alpha != null ? `${risk.alpha.toFixed(2)}%` : '—' },
+                { label: 'Sharpe Ratio',    value: risk.sharpe_ratio.toFixed(3) },
+                { label: 'Ann. Return',     value: `${risk.annualized_return.toFixed(2)}%` },
+                { label: 'Ann. Volatility', value: `${risk.annualized_volatility.toFixed(2)}%` },
+                { label: 'Max Drawdown',    value: `${risk.max_drawdown.toFixed(2)}%` },
+                { label: 'VaR 95%',         value: `${risk.var_95.toFixed(2)}%` },
+                { label: 'VaR 99%',         value: `${risk.var_99.toFixed(2)}%` },
+                { label: 'Beta',            value: risk.beta != null ? risk.beta.toFixed(3) : '—' },
+                { label: 'Alpha',           value: risk.alpha != null ? `${risk.alpha.toFixed(2)}%` : '—' },
               ].map(({ label, value }) => (
                 <div key={label} className="bg-surface/50 rounded-lg px-4 py-3">
                   <p className="text-slate-400 text-xs">{label}</p>

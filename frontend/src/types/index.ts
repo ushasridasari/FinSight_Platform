@@ -43,6 +43,13 @@ export interface ForecastPoint {
   upper_bound: number
 }
 
+export interface ForecastAICommentary {
+  commentary: string
+  confidence: 'High' | 'Medium' | 'Low' | 'Unknown'
+  key_assumptions: string[]
+  downside_risks: string[]
+}
+
 export interface ForecastResponse {
   ticker: string
   horizon_days: number
@@ -50,6 +57,7 @@ export interface ForecastResponse {
   historical: OHLCV[]
   forecast: ForecastPoint[]
   metrics: Record<string, unknown>
+  ai_commentary: ForecastAICommentary | null
 }
 
 export interface RiskMetrics {
@@ -132,4 +140,28 @@ export interface WatchlistItem {
   ticker: string
   added_at: string
   notes: string | null
+}
+
+export interface WatchlistScore {
+  ticker: string
+  score: number
+  label: 'Bullish' | 'Neutral' | 'Bearish'
+  action: 'Buy' | 'Hold' | 'Sell'
+  reason: string
+}
+
+export interface MarketSummary {
+  headline: string
+  key_themes: string[]
+  sector_outlook: Array<{ sector: string; outlook: string; note: string }>
+  market_mood: string
+  watch_today: string[]
+}
+
+export interface PortfolioAIHealth {
+  summary: string
+  strengths: string[]
+  risks: string[]
+  rebalancing_suggestions: Array<{ ticker: string; action: string; reason: string }>
+  overall_health: 'Excellent' | 'Good' | 'Fair' | 'Poor'
 }
