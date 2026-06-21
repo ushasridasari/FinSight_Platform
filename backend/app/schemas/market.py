@@ -62,6 +62,7 @@ class SentimentResult(BaseModel):
     neutral: float
     negative: float
     headline_count: int
+    ai_summary: Optional[str] = None
 
 
 class AIInsightRequest(BaseModel):

@@ -1,127 +1,173 @@
 """
-Time-series forecasting service.
-Uses Facebook Prophet for price prediction with uncertainty intervals.
-Falls back to polynomial regression when Prophet is unavailable.
+AI-powered price forecasting using Anthropic Claude.
+Claude analyzes historical OHLCV data and returns a structured price forecast
+with trend direction, target price, and confidence bounds.
 """
-import pandas as pd
-import numpy as np
-from typing import List
-from datetime import timedelta
+import json
+from datetime import datetime, timedelta
+from typing import List, Tuple
 
-from ..schemas.market import ForecastPoint, ForecastResponse, OHLCV
+import anthropic
+import pandas as pd
+
+from ..core.config import settings
+from ..schemas.market import ForecastResponse, ForecastPoint, OHLCV
 from .market_data import get_ohlcv_dataframe, get_ohlcv
 
 
-def _compute_forecast_metrics(actual: pd.Series, predicted: pd.Series) -> dict:
-    n = min(len(actual), len(predicted), 30)
-    if n == 0:
-        return {"mape": None, "rmse": None}
-    a = actual.values[-n:]
-    p = predicted.values[:n]
-    mape = float(np.mean(np.abs((a - p) / (a + 1e-9))) * 100)
-    rmse = float(np.sqrt(np.mean((a - p) ** 2)))
-    return {"mape": round(mape, 2), "rmse": round(rmse, 4)}
+def _client() -> anthropic.Anthropic:
+    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
 
-def forecast_with_prophet(ticker: str, horizon_days: int = 30) -> ForecastResponse:
-    try:
-        from prophet import Prophet
-    except ImportError:
-        return forecast_with_linear(ticker, horizon_days)
+def _ai_available() -> bool:
+    key = settings.anthropic_api_key
+    return bool(key) and not key.startswith("your_") and key.startswith("sk-")
 
-    df = get_ohlcv_dataframe(ticker, period="2y")
-    if df.empty or len(df) < 60:
-        raise ValueError(f"Insufficient historical data for {ticker}")
 
-    prophet_df = df[["Close"]].reset_index().rename(columns={"Date": "ds", "Close": "y"})
-    prophet_df["ds"] = pd.to_datetime(prophet_df["ds"]).dt.tz_localize(None)
+def _build_price_summary(df: pd.DataFrame) -> Tuple[str, float, float, float]:
+    recent = df.tail(60)
+    csv_lines = ["Date,Close,Volume"]
+    for date, row in recent.iterrows():
+        csv_lines.append(f"{str(date.date())},{row['Close']:.2f},{int(row['Volume'])}")
 
-    model = Prophet(
-        daily_seasonality=False,
-        weekly_seasonality=True,
-        yearly_seasonality=True,
-        changepoint_prior_scale=0.05,
-        interval_width=0.80,
+    first_price = float(df["Close"].iloc[0])
+    last_price  = float(df["Close"].iloc[-1])
+    high        = float(df["High"].max())
+    low         = float(df["Low"].min())
+    avg_vol     = int(df["Volume"].mean())
+    move_pct    = (last_price - first_price) / first_price * 100
+
+    summary = (
+        f"Period: {str(df.index[0].date())} to {str(df.index[-1].date())}\n"
+        f"Current price: ${last_price:.2f}\n"
+        f"Period high: ${high:.2f} | Period low: ${low:.2f}\n"
+        f"Price change over full period: {move_pct:+.2f}%\n"
+        f"Average daily volume: {avg_vol:,}\n\n"
+        f"Recent 60-day close prices (CSV):\n"
+        + "\n".join(csv_lines)
     )
-    model.fit(prophet_df)
+    return summary, last_price, high, low
 
-    future = model.make_future_dataframe(periods=horizon_days, freq="B")
-    forecast_df = model.predict(future)
 
-    last_hist_date = prophet_df["ds"].max()
-    fwd = forecast_df[forecast_df["ds"] > last_hist_date].tail(horizon_days)
-
-    forecast_points: List[ForecastPoint] = []
-    for _, row in fwd.iterrows():
-        forecast_points.append(ForecastPoint(
-            date=str(row["ds"].date()),
-            predicted=round(float(row["yhat"]), 4),
-            lower_bound=round(float(row["yhat_lower"]), 4),
-            upper_bound=round(float(row["yhat_upper"]), 4),
+def _generate_forecast_points(
+    current_price: float,
+    target_price: float,
+    confidence: int,
+    horizon_days: int,
+    last_date: datetime,
+) -> List[ForecastPoint]:
+    """
+    Linear interpolation from current price to Claude's target.
+    Uncertainty bands expand as sqrt(time) to mimic volatility scaling.
+    """
+    base_spread = current_price * (1 - confidence / 100) * 0.6
+    points = []
+    for day in range(1, horizon_days + 1):
+        t = day / horizon_days
+        predicted = current_price + (target_price - current_price) * t
+        spread    = base_spread * (t ** 0.5)
+        forecast_date = last_date + timedelta(days=day)
+        points.append(ForecastPoint(
+            date=forecast_date.strftime("%Y-%m-%d"),
+            predicted=round(predicted, 2),
+            lower_bound=round(predicted - spread, 2),
+            upper_bound=round(predicted + spread, 2),
         ))
-
-    in_sample = forecast_df[forecast_df["ds"] <= last_hist_date]
-    metrics = _compute_forecast_metrics(prophet_df["y"], in_sample["yhat"])
-    metrics["model"] = "Prophet"
-
-    historical = get_ohlcv(ticker, period="6mo")
-
-    return ForecastResponse(
-        ticker=ticker.upper(),
-        horizon_days=horizon_days,
-        model="Prophet",
-        historical=historical,
-        forecast=forecast_points,
-        metrics=metrics,
-    )
+    return points
 
 
-def forecast_with_linear(ticker: str, horizon_days: int = 30) -> ForecastResponse:
-    from sklearn.preprocessing import PolynomialFeatures
-    from sklearn.linear_model import Ridge
-    from sklearn.pipeline import Pipeline
-
+def get_forecast(ticker: str, horizon: int = 30) -> ForecastResponse:
+    ticker = ticker.upper()
     df = get_ohlcv_dataframe(ticker, period="1y")
     if df.empty:
-        raise ValueError(f"No data for {ticker}")
-
-    closes = df["Close"].values.flatten()
-    x = np.arange(len(closes)).reshape(-1, 1)
-
-    pipe = Pipeline([
-        ("poly", PolynomialFeatures(degree=3)),
-        ("ridge", Ridge(alpha=1.0)),
-    ])
-    pipe.fit(x, closes)
-
-    rolling_std = float(np.std(np.diff(closes) / closes[:-1]))
-
-    forecast_points: List[ForecastPoint] = []
-    for i in range(1, horizon_days + 1):
-        xi = np.array([[len(closes) + i]])
-        pred = float(pipe.predict(xi)[0])
-        band = pred * rolling_std * np.sqrt(i)
-        dt = (df.index[-1] + timedelta(days=i)).date()
-        forecast_points.append(ForecastPoint(
-            date=str(dt),
-            predicted=round(pred, 4),
-            lower_bound=round(max(pred - 2 * band, 0), 4),
-            upper_bound=round(pred + 2 * band, 4),
-        ))
+        raise ValueError(f"No historical data available for {ticker}")
 
     historical = get_ohlcv(ticker, period="6mo")
-    return ForecastResponse(
-        ticker=ticker.upper(),
-        horizon_days=horizon_days,
-        model="PolynomialRegression",
-        historical=historical,
-        forecast=forecast_points,
-        metrics={"model": "PolynomialRegression", "mape": None, "rmse": None},
-    )
+    last_date  = df.index[-1].to_pydatetime()
+    current_price = float(df["Close"].iloc[-1])
 
+    if not _ai_available():
+        forecast_pts = _generate_forecast_points(current_price, current_price, 50, horizon, last_date)
+        return ForecastResponse(
+            ticker=ticker,
+            horizon_days=horizon,
+            model="AI (key not configured — set ANTHROPIC_API_KEY)",
+            historical=historical,
+            forecast=forecast_pts,
+            metrics={},
+            ai_commentary={
+                "commentary": "Set ANTHROPIC_API_KEY in backend/.env to enable AI forecasting.",
+                "confidence": 0,
+                "trend": "Unknown",
+                "key_levels": [],
+                "catalysts": [],
+                "expected_move_pct": 0.0,
+            },
+        )
 
-def get_forecast(ticker: str, horizon_days: int = 30) -> ForecastResponse:
+    price_summary, current_price, high, low = _build_price_summary(df)
+
+    prompt = f"""You are a professional quantitative analyst. Study the historical price data for {ticker} below and generate a {horizon}-day price forecast.
+
+{price_summary}
+
+Respond ONLY with raw JSON — no markdown, no text outside the JSON object:
+{{
+  "target_price": <float: your predicted price {horizon} days from now>,
+  "trend": "<Bullish | Bearish | Neutral>",
+  "confidence": <integer 0-100: your confidence in this forecast>,
+  "commentary": "<2-3 sentences: interpretation of price action and forecast rationale>",
+  "key_levels": [
+    {{"type": "support", "price": <float>}},
+    {{"type": "resistance", "price": <float>}}
+  ],
+  "catalysts": ["<upside catalyst>", "<downside risk>"],
+  "expected_move_pct": <float: % change from current ${current_price:.2f} to your target>
+}}"""
+
     try:
-        return forecast_with_prophet(ticker, horizon_days)
+        msg  = _client().messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        data = json.loads(msg.content[0].text.strip())
     except Exception:
-        return forecast_with_linear(ticker, horizon_days)
+        data = {
+            "target_price": current_price,
+            "trend": "Neutral",
+            "confidence": 50,
+            "commentary": "AI analysis temporarily unavailable.",
+            "key_levels": [],
+            "catalysts": [],
+            "expected_move_pct": 0.0,
+        }
+
+    target_price = float(data.get("target_price", current_price))
+    confidence   = int(data.get("confidence", 50))
+    move_pct     = (target_price - current_price) / current_price * 100
+
+    forecast_pts = _generate_forecast_points(current_price, target_price, confidence, horizon, last_date)
+
+    return ForecastResponse(
+        ticker=ticker,
+        horizon_days=horizon,
+        model="Claude AI (claude-sonnet-4-6)",
+        historical=historical,
+        forecast=forecast_pts,
+        metrics={
+            "current_price":     round(current_price, 2),
+            "target_price":      round(target_price, 2),
+            "expected_move_pct": round(move_pct, 2),
+            "confidence":        confidence,
+            "trend":             data.get("trend", "Neutral"),
+        },
+        ai_commentary={
+            "commentary":        data.get("commentary", ""),
+            "confidence":        confidence,
+            "trend":             data.get("trend", "Neutral"),
+            "key_levels":        data.get("key_levels", []),
+            "catalysts":         data.get("catalysts", []),
+            "expected_move_pct": round(move_pct, 2),
+        },
+    )

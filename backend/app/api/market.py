@@ -3,7 +3,7 @@ from typing import List
 from ..schemas.market import (
     StockQuote, OHLCV, ForecastResponse, RiskMetrics, SentimentResult,
     AIInsightRequest, AIInsightResponse, MarketSummaryResponse,
-    WatchlistScoreItem, PortfolioAIRequest, ForecastCommentaryRequest,
+    WatchlistScoreItem, PortfolioAIRequest,
 )
 from ..services import market_data, forecasting, risk, sentiment, ai_insights
 
@@ -44,28 +44,9 @@ def movers():
 # ── ML Forecasting ────────────────────────────────────────────────────────────
 
 @router.get("/forecast/{ticker}", response_model=ForecastResponse)
-def forecast(ticker: str, horizon: int = Query(30, ge=7, le=180), with_ai: bool = Query(True)):
+def forecast(ticker: str, horizon: int = Query(30, ge=7, le=180)):
     try:
-        result = forecasting.get_forecast(ticker.upper(), horizon)
-        if with_ai:
-            try:
-                last = result.forecast[-1] if result.forecast else None
-                hist_last = result.historical[-1] if result.historical else None
-                if last and hist_last:
-                    move_pct = (last.predicted - hist_last.close) / hist_last.close * 100
-                    mape = result.metrics.get("mape")
-                    result.ai_commentary = ai_insights.get_forecast_commentary(
-                        ticker=ticker.upper(),
-                        model=result.model,
-                        horizon_days=horizon,
-                        predicted_price=last.predicted,
-                        current_price=hist_last.close,
-                        expected_move_pct=move_pct,
-                        mape=float(mape) if mape is not None else None,
-                    )
-            except Exception:
-                result.ai_commentary = None
-        return result
+        return forecasting.get_forecast(ticker.upper(), horizon)
     except ValueError as e:
         raise HTTPException(400, str(e))
     except Exception as e:
@@ -120,19 +101,6 @@ def ai_portfolio_analysis(payload: PortfolioAIRequest):
     """AI portfolio health check and rebalancing suggestions."""
     return ai_insights.get_portfolio_ai_analysis(payload.holdings)
 
-
-@router.post("/ai-forecast-commentary")
-def ai_forecast_commentary(payload: ForecastCommentaryRequest):
-    """AI commentary on a specific forecast result."""
-    return ai_insights.get_forecast_commentary(
-        ticker=payload.ticker,
-        model=payload.model,
-        horizon_days=payload.horizon_days,
-        predicted_price=payload.predicted_price,
-        current_price=payload.current_price,
-        expected_move_pct=payload.expected_move_pct,
-        mape=payload.mape,
-    )
 
 
 @router.get("/ai-watchlist-scores")

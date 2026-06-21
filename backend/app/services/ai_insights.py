@@ -14,7 +14,6 @@ from ..core.config import settings
 from ..schemas.market import AIInsightResponse
 from .market_data import get_stock_quote, get_market_movers
 from .risk import compute_risk_metrics
-from .sentiment import analyze_ticker_sentiment
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -70,12 +69,6 @@ def _gather_stock_context(ticker: str, extra: str = "") -> str:
             f"VaR 95%: {risk.var_95}%",
             f"Beta: {risk.beta}" if risk.beta else "",
         ]
-    except Exception:
-        pass
-
-    try:
-        s = analyze_ticker_sentiment(ticker)
-        lines.append(f"Sentiment: {s.label} (score {s.composite_score}, {s.headline_count} headlines)")
     except Exception:
         pass
 
