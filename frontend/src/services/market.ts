@@ -29,11 +29,11 @@ export const marketService = {
     return data
   },
 
-  // ── ML Forecasting ──────────────────────────────────────────────────────────
+  // ── AI Forecasting ──────────────────────────────────────────────────────────
 
-  async getForecast(ticker: string, horizon = 30, withAI = true): Promise<ForecastResponse> {
+  async getForecast(ticker: string, horizon = 30): Promise<ForecastResponse> {
     const { data } = await api.get<ForecastResponse>(`/market/forecast/${ticker}`, {
-      params: { horizon, with_ai: withAI },
+      params: { horizon },
     })
     return data
   },

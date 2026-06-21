@@ -45,9 +45,11 @@ export interface ForecastPoint {
 
 export interface ForecastAICommentary {
   commentary: string
-  confidence: 'High' | 'Medium' | 'Low' | 'Unknown'
-  key_assumptions: string[]
-  downside_risks: string[]
+  confidence: number
+  trend: 'Bullish' | 'Bearish' | 'Neutral' | 'Unknown'
+  key_levels: Array<{ type: 'support' | 'resistance'; price: number }>
+  catalysts: string[]
+  expected_move_pct: number
 }
 
 export interface ForecastResponse {
@@ -80,6 +82,7 @@ export interface SentimentResult {
   neutral: number
   negative: number
   headline_count: number
+  ai_summary: string | null
 }
 
 export interface AIInsightResponse {
