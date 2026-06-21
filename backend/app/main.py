@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.config import settings
 from .core.database import init_db
-from .api import auth, market, portfolio
+from .api import auth, market, portfolio, analytics
 
 app = FastAPI(
     title=settings.app_name,
@@ -29,6 +29,7 @@ def startup():
 app.include_router(auth.router, prefix="/api")
 app.include_router(market.router, prefix="/api")
 app.include_router(portfolio.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
 
 
 @app.get("/")
