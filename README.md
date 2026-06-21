@@ -24,6 +24,8 @@ FinForesight is a full-stack financial analytics platform designed for portfolio
 - **Sentiment Analysis** — NLP-driven market mood scoring
 - **AI Insights** — Claude-powered natural language market summaries
 - **Risk Analytics** — Sharpe ratio, VaR, beta, drawdown analysis
+- **Backtesting Engine** — 4 strategies (SMA Crossover, RSI, Bollinger Bands, MACD) with equity curve vs buy-and-hold
+- **Efficient Frontier** — Markowitz Monte Carlo optimization (3 000 portfolios), max-Sharpe and min-variance portfolios
 
 ## Project Structure
 
