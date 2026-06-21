@@ -1,22 +1,91 @@
 """
 Backtesting engine.
-Supports four strategies:
+Supports five strategies:
   1. SMA Crossover  — golden/death cross on two moving averages
   2. RSI            — oversold/overbought mean-reversion
   3. Bollinger Bands — price touches lower/upper band
   4. MACD           — signal line crossover
+  5. AI Signal      — Claude AI reads price windows and decides buy/sell
 
 Each strategy returns a BacktestResponse with full trade log,
 equity curve (strategy vs buy-and-hold), and performance metrics.
 """
+import json
 import numpy as np
 import pandas as pd
 from typing import List, Tuple
+import anthropic
 
+from ..core.config import settings
 from ..schemas.analytics import (
     BacktestRequest, BacktestResponse, BacktestMetrics, Trade, EquityPoint,
 )
 from .market_data import get_ohlcv_dataframe
+
+
+def _ai_available() -> bool:
+    key = settings.anthropic_api_key
+    return bool(key) and not key.startswith("your_") and key.startswith("sk-")
+
+
+def _ai_client() -> anthropic.Anthropic:
+    return anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+
+def _signals_ai(df: pd.DataFrame) -> pd.Series:
+    """
+    Ask Claude to identify buy/sell dates from the full price history.
+    Returns a Series of 1 (buy), -1 (sell), 0 (hold) indexed by date.
+    """
+    if not _ai_available():
+        return pd.Series(0, index=df.index)
+
+    # Condense to monthly snapshots to keep the prompt concise
+    monthly = df["Close"].resample("ME").last()
+    price_lines = "\n".join(f"{str(d.date())}: ${p:.2f}" for d, p in monthly.items())
+
+    prompt = f"""You are a quantitative trading analyst. Based on the monthly price history below, identify the best buy and sell dates for a swing trading strategy.
+
+Price history (monthly close):
+{price_lines}
+
+Rules:
+- Alternate strictly: first BUY, then SELL, then BUY again, etc.
+- Choose dates that appear in the price history above only.
+- Aim for 4-10 round-trip trades across the full period.
+
+Respond ONLY with a raw JSON array (no markdown):
+[
+  {{"date": "YYYY-MM-DD", "action": "BUY"}},
+  {{"date": "YYYY-MM-DD", "action": "SELL"}},
+  ...
+]"""
+
+    try:
+        msg  = _ai_client().messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        trades_raw = json.loads(msg.content[0].text.strip())
+    except Exception:
+        return pd.Series(0, index=df.index)
+
+    # Map Claude's dates to daily signals
+    signal = pd.Series(0, index=df.index)
+    for entry in trades_raw:
+        try:
+            date_str = entry["date"]
+            action   = entry["action"].upper()
+            # Find nearest trading day on or after the given date
+            target = pd.Timestamp(date_str)
+            match  = df.index[df.index >= target]
+            if len(match) > 0:
+                signal.loc[match[0]] = 1 if action == "BUY" else -1
+        except Exception:
+            continue
+
+    return signal
 
 TRADING_DAYS = 252
 
@@ -213,6 +282,8 @@ def run_backtest(req: BacktestRequest) -> BacktestResponse:
         signals = _signals_bollinger(df, req.short_window)
     elif strategy == "macd":
         signals = _signals_macd(df, req.macd_fast, req.macd_slow, req.macd_signal)
+    elif strategy == "ai_signal":
+        signals = _signals_ai(df)
     else:
         raise ValueError(f"Unknown strategy: {req.strategy}")
 

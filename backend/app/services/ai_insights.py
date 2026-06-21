@@ -270,7 +270,113 @@ JSON format:
     })
 
 
-# ── 5. Watchlist batch scoring ────────────────────────────────────────────────
+# ── 5. Risk metrics interpretation ───────────────────────────────────────────
+
+def get_risk_interpretation(ticker: str, metrics: dict) -> dict:
+    """
+    Claude reads computed risk metrics and explains what they mean
+    in plain English for this specific stock.
+    """
+    if not _ai_available():
+        return {
+            "interpretation": "Set ANTHROPIC_API_KEY to enable AI risk interpretation.",
+            "risk_grade": "Unknown",
+            "key_takeaways": [],
+            "recommendation": "N/A",
+        }
+
+    prompt = f"""You are a risk analyst. Interpret the following risk metrics for {ticker.upper()} and explain what they mean to an investor in plain English. Respond ONLY with raw JSON (no markdown).
+
+Risk Metrics for {ticker.upper()}:
+- Sharpe Ratio: {metrics.get('sharpe_ratio')} (>1 is good, >2 is excellent)
+- Annualized Return: {metrics.get('annualized_return')}%
+- Annualized Volatility: {metrics.get('annualized_volatility')}%
+- Max Drawdown: {metrics.get('max_drawdown')}% (worst peak-to-trough loss)
+- VaR 95%: {metrics.get('var_95')}% (daily loss not exceeded 95% of time)
+- VaR 99%: {metrics.get('var_99')}% (daily loss not exceeded 99% of time)
+- Beta vs SPY: {metrics.get('beta', 'N/A')} (<1 = less volatile than market)
+- Alpha: {metrics.get('alpha', 'N/A')}% (excess return above market)
+
+JSON format:
+{{
+  "interpretation": "<3-4 sentence plain-English explanation of what these metrics tell us about this stock's risk profile>",
+  "risk_grade": "<A | B | C | D | F>",
+  "key_takeaways": ["<takeaway 1>", "<takeaway 2>", "<takeaway 3>"],
+  "recommendation": "<how much portfolio weight is appropriate given this risk profile, e.g. 'Suitable for up to 10% portfolio weight for moderate risk investors'>"
+}}"""
+
+    raw = _ask(prompt, max_tokens=500)
+    return _safe_json(raw, {
+        "interpretation": raw,
+        "risk_grade": "Unknown",
+        "key_takeaways": [],
+        "recommendation": "N/A",
+    })
+
+
+# ── 6. AI Portfolio Construction ──────────────────────────────────────────────
+
+def get_ai_portfolio_weights(tickers: list, context: str = "") -> dict:
+    """
+    Claude suggests portfolio allocation weights for a basket of tickers
+    based on their fundamentals and recent price performance.
+    """
+    if not _ai_available():
+        n = len(tickers)
+        return {
+            "weights": {t: round(1/n, 4) for t in tickers},
+            "rationale": "Set ANTHROPIC_API_KEY to enable AI portfolio construction.",
+            "risk_profile": "Unknown",
+            "rebalance_frequency": "N/A",
+            "key_reasoning": [],
+        }
+
+    stock_lines = []
+    for ticker in tickers:
+        try:
+            q = get_stock_quote(ticker)
+            stock_lines.append(
+                f"{ticker}: ${q.price} ({q.change_pct:+.2f}% today), "
+                f"sector={q.sector or 'N/A'}, P/E={q.pe_ratio or 'N/A'}, "
+                f"52W range ${q.week_52_low}–${q.week_52_high}"
+            )
+        except Exception:
+            stock_lines.append(f"{ticker}: data unavailable")
+
+    prompt = f"""You are a portfolio manager. Allocate weights across the following stocks to build a well-diversified, risk-adjusted portfolio. Weights must sum to exactly 1.0. Respond ONLY with raw JSON (no markdown).
+
+Stocks:
+{chr(10).join(stock_lines)}
+{f'Additional context: {context}' if context else ''}
+
+JSON format:
+{{
+  "weights": {{ "<TICKER>": <float weight 0-1>, ... }},
+  "rationale": "<2-3 sentence explanation of the overall allocation strategy>",
+  "risk_profile": "<Conservative | Moderate | Aggressive>",
+  "rebalance_frequency": "<Monthly | Quarterly | Annually>",
+  "key_reasoning": [
+    {{"ticker": "<TICKER>", "weight_pct": <int>, "reason": "<one sentence why this weight>"}}
+  ]
+}}"""
+
+    raw = _ask(prompt, max_tokens=700)
+    result = _safe_json(raw, {
+        "weights": {t: round(1/len(tickers), 4) for t in tickers},
+        "rationale": raw,
+        "risk_profile": "Moderate",
+        "rebalance_frequency": "Quarterly",
+        "key_reasoning": [],
+    })
+
+    # Normalize weights to sum to 1.0
+    weights = result.get("weights", {})
+    total = sum(weights.values()) or 1
+    result["weights"] = {k: round(v / total, 4) for k, v in weights.items()}
+    return result
+
+
+# ── 7. Watchlist batch scoring ────────────────────────────────────────────────
 
 def get_watchlist_scores(tickers: List[str]) -> List[dict]:
     """Return a quick AI score for each ticker — designed for speed, not depth."""
