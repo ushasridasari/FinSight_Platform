@@ -1,10 +1,10 @@
 # FinForesight — AI-Powered Financial Dashboard
 
-> A full-stack financial analytics platform combining real-time market data, machine learning forecasting, portfolio management, backtesting, and Claude AI-driven insights.
+> A full-stack financial analytics platform where Anthropic Claude AI is the sole intelligence layer — powering forecasting, sentiment, risk interpretation, portfolio construction, backtesting signals, and market insights.
 
 ## Overview
 
-FinForesight is a graduate-level systems project built by an MS Software Engineering student. It demonstrates end-to-end integration of modern web technologies with ML pipelines — from a FastAPI backend with SQLAlchemy ORM to a React/TypeScript SPA with live charts and an Anthropic Claude AI layer woven across every page.
+FinForesight is a graduate-level systems project built by an MS Software Engineering student. It demonstrates deep end-to-end AI integration using the Anthropic Claude API across a FastAPI backend and a React/TypeScript SPA — every analytical decision in the platform is driven by Claude, with yfinance providing raw market data and NumPy/pandas handling the math.
 
 ---
 
@@ -18,86 +18,92 @@ FinForesight is a graduate-level systems project built by an MS Software Enginee
 | HTTP | Axios with JWT interceptor, auto 401 redirect |
 | Backend | FastAPI (Python 3.11+), Uvicorn |
 | ORM | SQLAlchemy, SQLite |
-| Auth | JWT (python-jose), bcrypt (direct, no passlib) |
-| ML — Forecasting | Facebook Prophet (primary), scikit-learn Polynomial Ridge (fallback) |
-| ML — Sentiment | VADER NLP sentiment analysis |
-| ML — Risk | Sharpe ratio, VaR 95/99, max drawdown, beta/alpha (NumPy/pandas) |
-| ML — Backtesting | SMA Crossover, RSI, Bollinger Bands, MACD (pandas-based walk-forward) |
-| ML — Portfolio | Markowitz Efficient Frontier via Monte Carlo simulation (3 000 portfolios) |
-| AI | Anthropic Claude API (`claude-sonnet-4-6`) — 5 distinct AI endpoints |
+| Auth | JWT (python-jose), bcrypt |
+| **AI** | **Anthropic Claude API (`claude-sonnet-4-6`) — sole intelligence layer** |
 | Market Data | yfinance (OHLCV, quotes, news headlines) |
+| Math / Data | NumPy, pandas (risk formulas, backtesting simulation) |
 | Infrastructure | Docker, Docker Compose, Nginx (frontend), multi-stage builds |
 
----
-
-## Pages & Features
-
-| Page | What it does |
-|------|-------------|
-| **Dashboard** | AI Daily Briefing card (Claude market summary), SPY 3-month price chart, top market movers table |
-| **Market** | Ticker search → live quote, 1-year price chart, risk metrics, sentiment gauge; AI analysis auto-runs per search |
-| **Forecast** | Prophet price forecast with confidence bands (7/30/90-day horizon); AI commentary panel explains the prediction |
-| **Portfolio** | Add/remove holdings and transactions, live P&L, allocation donut chart; "Run AI Portfolio Analysis" for rebalancing suggestions |
-| **Watchlist** | Tracked tickers with live prices; "AI Score All" batch-rates every ticker with conviction score and rationale |
-| **AI Insights** | Deep single-stock analysis — paste any context, Claude returns outlook, risks, catalysts, and sentiment |
-| **Backtest** | Configure any of 4 strategies, run walk-forward simulation, view equity curve vs buy-and-hold, full trade log and 10 performance metrics |
-| **Optimizer** | Enter a basket of tickers, simulate 3 000 random portfolios, view Efficient Frontier scatter, max-Sharpe / min-variance / equal-weight weight breakdowns, and correlation matrix |
+> **No ML libraries.** Prophet, scikit-learn, VADER, and scipy have been removed. Claude AI replaced all of them.
 
 ---
 
-## AI Integration (Claude)
+## Pages & Features (10 pages)
 
-Five Claude-backed endpoints, all gracefully degrade to `null` when no API key is configured:
-
-| Endpoint | Trigger | Output |
-|----------|---------|--------|
-| `GET /api/market/ai-summary` | Dashboard load | Daily market briefing |
-| `GET /api/market/ai-insight` | Market page ticker search | Single-stock outlook |
-| `POST /api/market/ai-portfolio-analysis` | Portfolio page button | Health score + rebalancing suggestions |
-| `GET /api/market/ai-forecast-commentary` | Forecast page | Explains Prophet prediction |
-| `GET /api/market/ai-watchlist-scores` | Watchlist page button | Batch conviction scores |
-| `POST /api/analytics/backtest` (embedded) | Backtest run | Strategy evaluation summary |
-| `POST /api/analytics/optimize` (embedded) | Optimizer run | Portfolio allocation recommendation |
+| Page | Route | What Claude AI does |
+|------|-------|-------------------|
+| **Dashboard** | `/` | Generates a daily market briefing — headline, key themes, sector outlook, market mood |
+| **Market** | `/market` | Auto-analyzes every ticker you search — investment thesis, risk level, recommendation |
+| **Forecast** | `/forecast` | Reads 1 year of price history and predicts a target price, trend direction, confidence %, key support/resistance levels, and catalysts |
+| **Portfolio** | `/portfolio` | "Run AI Portfolio Analysis" — health score, strengths, risks, per-holding rebalancing suggestions |
+| **Watchlist** | `/watchlist` | "AI Score All" — batch conviction scores (1–10), Bullish/Bearish label, and action for every tracked ticker |
+| **AI Insights** | `/ai-insights` | Deep single-stock analysis — paste any context, get outlook, key factors, risk level, and recommendation |
+| **Backtest** | `/backtest` | 5 strategies including **AI Signal** — Claude reads price history and picks buy/sell dates itself |
+| **Optimizer** | `/optimizer` | Monte Carlo Efficient Frontier — max-Sharpe, min-variance, equal-weight portfolios + Claude commentary |
+| **AI Portfolio** | `/ai-portfolio` | Claude allocates weights for a basket of stocks with per-stock rationale, risk profile, rebalance frequency |
+| **AI Risk** | `/ai-risk` | Computes Sharpe/VaR/drawdown/beta then Claude explains what they mean — letter grade A–F, key takeaways, portfolio weight guidance |
 
 ---
 
-## ML Pipeline
+## AI Integration — Complete Map
 
-### Price Forecasting
-Facebook **Prophet** trained on yfinance OHLCV history. Returns predicted price + upper/lower confidence intervals for 7, 30, or 90 days. Falls back to **scikit-learn Polynomial Ridge** regression if Prophet fails (e.g., insufficient data).
+All 10 Claude-powered functions, every one gracefully returns a fallback when `ANTHROPIC_API_KEY` is absent:
 
-### Sentiment Analysis
-VADER NLP scores yfinance news headlines for the ticker. Aggregates compound scores into a Bullish / Bearish / Neutral signal with a confidence percentage.
+| Function | Endpoint | What Claude receives | What Claude returns |
+|----------|----------|---------------------|-------------------|
+| Daily market briefing | `GET /api/market/ai-summary` | SPY direction, top gainers/losers | Headline, themes, sector outlook, market mood |
+| Price forecast | `GET /api/market/forecast/{ticker}` | 60-day close price CSV + period stats | Target price, trend, confidence, support/resistance, catalysts |
+| News sentiment | `GET /api/market/sentiment/{ticker}` | Up to 20 news headlines | Bullish/Bearish/Neutral score + written summary |
+| Single-stock insight | `POST /api/market/ai-insight` | Price, 52W range, P/E, sector, risk metrics | Investment thesis, key factors, risk level, recommendation |
+| Portfolio health | `POST /api/market/ai-portfolio-analysis` | All holdings with P&L, weight, sector | Health grade, strengths, risks, per-ticker actions |
+| Watchlist scoring | `GET /api/market/ai-watchlist-scores` | Live quotes for all watched tickers | Score 1–10, label, Buy/Hold/Sell action, reason |
+| Backtest AI signal | `POST /api/analytics/backtest` (strategy=ai_signal) | Monthly price history | Optimal buy/sell dates → walk-forward trade signals |
+| Backtest summary | `POST /api/analytics/backtest` | Final metrics (return, Sharpe, win rate) | Strategy evaluation commentary |
+| Optimizer commentary | `POST /api/analytics/optimize` | Max-Sharpe weights + stats | Portfolio recommendation narrative |
+| **AI Portfolio Construction** | `POST /api/analytics/ai-portfolio` | Live quotes for all tickers + user goals | Weight allocation, per-stock reasoning, risk profile, rebalance frequency |
+| **AI Risk Interpretation** | `GET /api/analytics/ai-risk/{ticker}` | Sharpe, VaR, drawdown, beta, alpha | Risk grade A–F, plain-English explanation, portfolio weight guidance |
 
-### Risk Metrics
+---
+
+## Backtesting Engine
+
+Walk-forward simulation — no look-ahead bias. Five strategies:
+
+| Strategy | Signal logic |
+|----------|-------------|
+| **AI Signal (Claude)** | Claude reads monthly price history and identifies the optimal buy/sell dates |
+| SMA Crossover | Buy when fast SMA crosses above slow SMA; sell on cross below |
+| RSI Mean-Reversion | Buy when RSI < 30 (oversold); sell when RSI > 70 (overbought) |
+| Bollinger Bands | Buy on lower-band touch; sell on upper-band touch |
+| MACD | Buy when MACD line crosses above signal line; sell on cross below |
+
+Metrics: total return %, buy-and-hold return %, annualized return, annualized volatility, Sharpe ratio, max drawdown, win rate, total trades, profitable trades, avg trade P&L.
+
+---
+
+## Efficient Frontier (Optimizer)
+
+Monte Carlo simulation samples 3 000 random weight vectors. For each portfolio computes annualized expected return, volatility, and Sharpe ratio. Identifies:
+- **Max-Sharpe portfolio** — best risk-adjusted return
+- **Min-Variance portfolio** — lowest volatility
+- **Equal-weight baseline** — naive benchmark
+- Full asset **correlation matrix** for diversification analysis
+- Claude AI commentary on the recommended allocation
+
+---
+
+## Risk Metrics (Math Layer)
+
+These are computed as formulas, then explained by Claude AI:
+
 - **Sharpe Ratio**: `(Rp - Rf) / σp` annualized
 - **VaR 95 / VaR 99**: Historical simulation on daily returns
 - **Maximum Drawdown**: Peak-to-trough percentage decline
 - **Beta / Alpha**: Covariance vs SPY benchmark
 
-### Backtesting Engine
-Walk-forward simulation — no look-ahead bias. Four strategies:
-
-| Strategy | Signal logic |
-|----------|-------------|
-| SMA Crossover | Buy when fast SMA crosses above slow SMA; sell on cross below |
-| RSI Mean-Reversion | Buy when RSI < oversold (30); sell when RSI > overbought (70) |
-| Bollinger Bands | Buy on lower-band touch; sell on upper-band touch |
-| MACD | Buy when MACD line crosses above signal line; sell on cross below |
-
-Metrics reported: total return %, buy-and-hold return %, annualized return, annualized volatility, Sharpe ratio, max drawdown, win rate, total trades, profitable trades, average trade P&L.
-
-### Efficient Frontier (Markowitz)
-Monte Carlo simulation samples 3 000 random weight vectors. For each portfolio computes annualized expected return, volatility, and Sharpe ratio. Identifies:
-- **Max-Sharpe portfolio** — best risk-adjusted return
-- **Min-Variance portfolio** — lowest volatility
-- **Equal-weight baseline** — naive benchmark
-
-Also returns full asset correlation matrix for diversification analysis.
-
 ---
 
-## API Endpoints
+## API Reference
 
 ### Auth (`/api/auth`)
 | Method | Path | Description |
@@ -113,15 +119,14 @@ Also returns full asset correlation matrix for diversification analysis.
 | GET | `/quotes?tickers=` | Batch quotes |
 | GET | `/history/{ticker}` | OHLCV history |
 | GET | `/movers` | Top market movers |
-| GET | `/forecast/{ticker}` | Prophet price forecast + AI commentary |
-| GET | `/risk/{ticker}` | Risk metrics |
+| GET | `/forecast/{ticker}` | **Claude AI price forecast** |
+| GET | `/risk/{ticker}` | Risk metrics (Sharpe, VaR, beta) |
 | GET | `/portfolio-risk` | Portfolio-level risk |
-| GET | `/sentiment/{ticker}` | VADER sentiment |
-| POST | `/ai-insight` | Single-stock AI analysis |
-| GET | `/ai-summary` | Daily AI market briefing |
-| POST | `/ai-portfolio-analysis` | Portfolio health check |
-| POST | `/ai-forecast-commentary` | Forecast explanation |
-| GET | `/ai-watchlist-scores` | Batch ticker scoring |
+| GET | `/sentiment/{ticker}` | **Claude AI news sentiment** |
+| POST | `/ai-insight` | **Claude single-stock analysis** |
+| GET | `/ai-summary` | **Claude daily market briefing** |
+| POST | `/ai-portfolio-analysis` | **Claude portfolio health check** |
+| GET | `/ai-watchlist-scores` | **Claude batch ticker scoring** |
 
 ### Portfolio (`/api/portfolio`)
 | Method | Path | Description |
@@ -139,8 +144,10 @@ Also returns full asset correlation matrix for diversification analysis.
 ### Analytics (`/api/analytics`)
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/backtest` | Run strategy backtest |
-| POST | `/optimize` | Run Efficient Frontier optimizer |
+| POST | `/backtest` | Run strategy backtest (incl. AI Signal) |
+| POST | `/optimize` | Efficient Frontier + Claude commentary |
+| POST | `/ai-portfolio` | **Claude AI portfolio weight allocation** |
+| GET | `/ai-risk/{ticker}` | **Claude AI risk interpretation + grade** |
 
 ---
 
@@ -154,11 +161,11 @@ FinForesight/
 │   │   │   ├── auth.py
 │   │   │   ├── market.py
 │   │   │   ├── portfolio.py
-│   │   │   └── analytics.py        # Backtest + Optimizer endpoints
+│   │   │   └── analytics.py          # Backtest, Optimizer, AI Portfolio, AI Risk
 │   │   ├── core/
-│   │   │   ├── config.py           # Pydantic Settings
-│   │   │   ├── security.py         # bcrypt hash/verify
-│   │   │   └── database.py         # SQLAlchemy engine
+│   │   │   ├── config.py             # Pydantic Settings
+│   │   │   ├── security.py           # bcrypt hash/verify
+│   │   │   └── database.py           # SQLAlchemy engine
 │   │   ├── models/
 │   │   │   ├── user.py
 │   │   │   └── portfolio.py
@@ -166,29 +173,29 @@ FinForesight/
 │   │   │   ├── user.py
 │   │   │   ├── portfolio.py
 │   │   │   ├── market.py
-│   │   │   └── analytics.py        # Backtest + Frontier schemas
+│   │   │   └── analytics.py          # Backtest, Frontier, AIPortfolio, AIRisk schemas
 │   │   ├── services/
-│   │   │   ├── market_data.py      # yfinance wrapper
-│   │   │   ├── forecasting.py      # Prophet + Ridge fallback
-│   │   │   ├── risk.py             # Sharpe, VaR, drawdown, beta
-│   │   │   ├── sentiment.py        # VADER NLP
-│   │   │   ├── ai_insights.py      # Claude API (5 functions)
-│   │   │   ├── backtesting.py      # 4 strategy walk-forward engine
-│   │   │   └── optimizer.py        # Monte Carlo Efficient Frontier
+│   │   │   ├── market_data.py        # yfinance wrapper
+│   │   │   ├── forecasting.py        # Claude AI price forecast
+│   │   │   ├── sentiment.py          # Claude AI news sentiment
+│   │   │   ├── risk.py               # Sharpe, VaR, drawdown, beta (math)
+│   │   │   ├── ai_insights.py        # Claude API — 7 AI functions
+│   │   │   ├── backtesting.py        # 5 strategies incl. Claude AI Signal
+│   │   │   └── optimizer.py          # Monte Carlo Efficient Frontier
 │   │   └── main.py
 │   ├── tests/
 │   │   ├── conftest.py
 │   │   ├── test_auth.py
 │   │   ├── test_portfolio.py
 │   │   └── test_risk.py
-│   ├── requirements.txt
+│   ├── requirements.txt              # FastAPI + yfinance + anthropic only
 │   ├── Dockerfile
 │   └── .env.example
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── layout/             # Sidebar, AppLayout
-│   │   │   ├── ui/                 # Card, KPICard, Badge, Spinner, AIPanel
+│   │   │   ├── layout/               # Sidebar (10 links), AppLayout
+│   │   │   ├── ui/                   # Card, KPICard, Badge, Spinner, AIPanel
 │   │   │   └── charts/
 │   │   │       ├── PriceChart.tsx
 │   │   │       ├── ForecastChart.tsx
@@ -208,10 +215,12 @@ FinForesight/
 │   │   │   ├── RegisterPage.tsx
 │   │   │   └── analytics/
 │   │   │       ├── BacktestPage.tsx
-│   │   │       └── OptimizerPage.tsx
-│   │   ├── services/               # Axios API client layer
-│   │   ├── store/                  # Zustand auth store
-│   │   └── types/                  # TypeScript interfaces
+│   │   │       ├── OptimizerPage.tsx
+│   │   │       ├── AIPortfolioPage.tsx  # Claude portfolio construction
+│   │   │       └── AIRiskPage.tsx       # Claude risk interpretation
+│   │   ├── services/                 # Axios API client layer
+│   │   ├── store/                    # Zustand auth store
+│   │   └── types/                    # TypeScript interfaces
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   └── package.json
@@ -229,7 +238,7 @@ python -m venv venv
 venv\Scripts\activate          # Windows
 # source venv/bin/activate     # macOS/Linux
 pip install -r requirements.txt
-cp .env.example .env           # Add ANTHROPIC_API_KEY (optional — AI features degrade gracefully without it)
+cp .env.example .env           # Set ANTHROPIC_API_KEY for AI features
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -246,14 +255,14 @@ docker-compose up --build      # Backend: 8000, Frontend: 3000
 ```
 
 ### API Docs
-Visit `http://localhost:8000/docs` for interactive Swagger UI once the backend is running.
+Visit `http://localhost:8000/docs` for interactive Swagger UI.
 
 ---
 
 ## Environment Variables
 
 ```env
-ANTHROPIC_API_KEY=sk-ant-...   # Optional — AI features disabled if absent
+ANTHROPIC_API_KEY=sk-ant-...   # Required for all AI features; app runs without it but AI returns fallback messages
 SECRET_KEY=your_jwt_secret
 DATABASE_URL=sqlite:///./finforesight.db
 ENVIRONMENT=development
