@@ -171,7 +171,9 @@ export default function OptimizerPage() {
 
           {/* AI recommendation */}
           {data.ai_recommendation && (
-            <AIPanel title="AI Portfolio Recommendation" content={data.ai_recommendation} />
+            <AIPanel title="AI Portfolio Recommendation">
+              <p className="text-white text-sm leading-relaxed">{data.ai_recommendation}</p>
+            </AIPanel>
           )}
         </>
       )}

@@ -25,10 +25,7 @@ def run_backtest(req: BacktestRequest):
                     f"Win Rate: {m.win_rate}%, Trades: {m.total_trades}."
                 )
                 ai_resp = ai_insights.get_ai_insight(req.ticker, prompt_ctx)
-                if isinstance(ai_resp, dict):
-                    result.ai_summary = ai_resp.get("insight")
-                else:
-                    result.ai_summary = getattr(ai_resp, "insight", None)
+                result.ai_summary = getattr(ai_resp, "insight", None)
         except Exception:
             pass
         return result
@@ -53,10 +50,7 @@ def run_optimizer(req: OptimizeRequest):
                     f"Min-variance volatility: {result.min_variance.volatility}%."
                 )
                 ai_resp = ai_insights.get_ai_insight(result.tickers[0], ctx)
-                if isinstance(ai_resp, dict):
-                    result.ai_recommendation = ai_resp.get("insight")
-                else:
-                    result.ai_recommendation = getattr(ai_resp, "insight", None)
+                result.ai_recommendation = getattr(ai_resp, "insight", None)
         except Exception:
             pass
         return result

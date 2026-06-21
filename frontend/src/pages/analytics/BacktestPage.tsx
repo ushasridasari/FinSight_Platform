@@ -205,7 +205,9 @@ export default function BacktestPage() {
 
           {/* AI summary */}
           {data.ai_summary && (
-            <AIPanel title="AI Strategy Analysis" content={data.ai_summary} />
+            <AIPanel title="AI Strategy Analysis">
+              <p className="text-white text-sm leading-relaxed">{data.ai_summary}</p>
+            </AIPanel>
           )}
 
           {/* Trade log */}
