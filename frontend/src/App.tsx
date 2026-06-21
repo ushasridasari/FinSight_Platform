@@ -9,8 +9,10 @@ import PortfolioPage  from './pages/PortfolioPage'
 import ForecastPage   from './pages/ForecastPage'
 import AIInsightsPage from './pages/AIInsightsPage'
 import WatchlistPage  from './pages/WatchlistPage'
-import BacktestPage   from './pages/analytics/BacktestPage'
-import OptimizerPage  from './pages/analytics/OptimizerPage'
+import BacktestPage      from './pages/analytics/BacktestPage'
+import OptimizerPage     from './pages/analytics/OptimizerPage'
+import AIPortfolioPage   from './pages/analytics/AIPortfolioPage'
+import AIRiskPage        from './pages/analytics/AIRiskPage'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { token } = useAuthStore()
@@ -30,8 +32,10 @@ export default function App() {
         <Route path="/forecast"    element={<ForecastPage />} />
         <Route path="/ai-insights" element={<AIInsightsPage />} />
         <Route path="/watchlist"   element={<WatchlistPage />} />
-        <Route path="/backtest"    element={<BacktestPage />} />
-        <Route path="/optimizer"   element={<OptimizerPage />} />
+        <Route path="/backtest"      element={<BacktestPage />} />
+        <Route path="/optimizer"     element={<OptimizerPage />} />
+        <Route path="/ai-portfolio"  element={<AIPortfolioPage />} />
+        <Route path="/ai-risk"       element={<AIRiskPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

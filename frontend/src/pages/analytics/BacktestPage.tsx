@@ -7,6 +7,7 @@ import AIPanel from '../../components/ui/AIPanel';
 import EquityCurveChart from '../../components/charts/analytics/EquityCurveChart';
 
 const STRATEGIES = [
+  { value: 'ai_signal',    label: '🤖 AI Signal (Claude)' },
   { value: 'sma_crossover', label: 'SMA Crossover' },
   { value: 'rsi',           label: 'RSI Mean-Reversion' },
   { value: 'bollinger',     label: 'Bollinger Bands' },
