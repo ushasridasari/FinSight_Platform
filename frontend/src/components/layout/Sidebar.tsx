@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, TrendingUp, BarChart2, BrainCircuit, Briefcase, Star, LogOut } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, BarChart2, BrainCircuit, Briefcase, Star, LogOut, FlaskConical, Target } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import clsx from 'clsx'
 
@@ -10,6 +10,8 @@ const links = [
   { to: '/forecast', label: 'Forecast', icon: BarChart2 },
   { to: '/ai-insights', label: 'AI Insights', icon: BrainCircuit },
   { to: '/watchlist', label: 'Watchlist', icon: Star },
+  { to: '/backtest',  label: 'Backtest',  icon: FlaskConical },
+  { to: '/optimizer', label: 'Optimizer', icon: Target },
 ]
 
 export default function Sidebar() {
