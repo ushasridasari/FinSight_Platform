@@ -8,8 +8,11 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Claude AI](https://img.shields.io/badge/Claude-AI-orange?style=flat)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)
+![Vercel](https://img.shields.io/badge/Deployed-Vercel-black?style=flat&logo=vercel&logoColor=white)
 
 **A production-grade full-stack financial analytics platform powered entirely by Anthropic Claude AI**
+
+🚀 **Live Demo:** [https://finforesight-azure.vercel.app](https://finforesight-azure.vercel.app)
 
 [Features](#features) · [Architecture](#system-architecture) · [AI Integration](#ai-integration) · [Tech Stack](#tech-stack) · [Setup](#setup--installation) · [API Reference](#api-reference)
 
@@ -434,6 +437,36 @@ Passwords are hashed with bcrypt directly (no passlib) to avoid Python 3.13 comp
 | **Claude Extended Thinking** | Use Claude's extended thinking mode for deeper multi-step financial reasoning |
 | **PDF Report Export** | AI-generated portfolio reports exportable as branded PDFs |
 | **Mobile App** | React Native companion app using the same FastAPI backend |
+
+---
+
+## Deployment
+
+The frontend is deployed on **Vercel** with automatic production builds from the `master` branch.
+
+| Layer | Platform | URL |
+|-------|----------|-----|
+| Frontend (React/Vite) | Vercel | [finforesight-azure.vercel.app](https://finforesight-azure.vercel.app) |
+| Backend (FastAPI) | Railway *(coming soon)* | — |
+
+### Frontend (Vercel)
+
+Deployed via Vercel CLI from `frontend/`. SPA routing is handled via rewrites in `frontend/vercel.json`. The `VITE_API_URL` environment variable points the frontend at the deployed backend — set this in Vercel's project settings once the backend is live.
+
+```bash
+# Re-deploy manually
+cd frontend
+vercel deploy --prod
+```
+
+### Backend (Railway — local for now)
+
+The FastAPI backend requires Python 3.11+, a SQLite database, and an `ANTHROPIC_API_KEY`. Run locally with:
+
+```bash
+cd backend
+uvicorn app.main:app --reload --port 8000
+```
 
 ---
 
