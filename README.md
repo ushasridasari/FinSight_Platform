@@ -436,12 +436,9 @@ pytest
 | Backend | Render (free plan) | [finsight-backend-v0ni.onrender.com](https://finsight-backend-v0ni.onrender.com/docs) |
 
 ### Frontend on Vercel
-The frontend in `frontend/` is deployed with the Vercel CLI. Page routing is handled by rewrites in `frontend/vercel.json`. The `VITE_API_URL` variable tells the frontend where the backend is. In Vercel it is set to `https://finsight-backend-v0ni.onrender.com`.
+The Vercel project is connected to this GitHub repo with root directory `frontend`, so every push to `master` deploys the frontend automatically. Page routing is handled by rewrites in `frontend/vercel.json`. The `VITE_API_URL` variable tells the frontend where the backend is. In Vercel it is set to `https://finsight-backend-v0ni.onrender.com`.
 
-```bash
-cd frontend
-vercel deploy --prod
-```
+Render also redeploys the backend by itself when something in `backend/` changes. So normally you only need `git push`.
 
 ### Backend
 I added `render.yaml` (Render), `railway.json` (Railway) and a `Procfile`. They all start the app with:
