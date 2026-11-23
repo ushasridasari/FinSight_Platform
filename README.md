@@ -433,10 +433,10 @@ pytest
 | Part | Where | Link |
 |------|-------|------|
 | Frontend | Vercel | [finforesight-azure.vercel.app](https://finforesight-azure.vercel.app) |
-| Backend | Render or Railway (config is ready, not live yet) | |
+| Backend | Render (free plan) | [finsight-backend-v0ni.onrender.com](https://finsight-backend-v0ni.onrender.com/docs) |
 
 ### Frontend on Vercel
-The frontend in `frontend/` is deployed with the Vercel CLI. Page routing is handled by rewrites in `frontend/vercel.json`. The `VITE_API_URL` variable tells the frontend where the backend is. I need to set it in Vercel settings once the backend is live.
+The frontend in `frontend/` is deployed with the Vercel CLI. Page routing is handled by rewrites in `frontend/vercel.json`. The `VITE_API_URL` variable tells the frontend where the backend is. In Vercel it is set to `https://finsight-backend-v0ni.onrender.com`.
 
 ```bash
 cd frontend
@@ -450,9 +450,14 @@ I added `render.yaml` (Render), `railway.json` (Railway) and a `Procfile`. They 
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
 
-You need to set `ANTHROPIC_API_KEY` and `SECRET_KEY` in the platform settings. The backend CORS already allows the Vercel domain.
+The live backend runs on Render free plan, with root directory `backend`, `PYTHON_VERSION=3.11.9`, and `SECRET_KEY` set in Render settings. `ANTHROPIC_API_KEY` is optional, without it the AI parts show a fallback message. The backend CORS already allows the Vercel domain.
 
-For now, you can run the backend locally:
+Some things to know about the free plan:
+- The backend sleeps after about 15 minutes with no traffic. First request after that can take around 50 seconds.
+- The database is SQLite, so accounts and portfolios are reset when the service restarts or redeploys.
+- Yahoo blocks some requests from cloud servers, so company name, P/E and sector can be empty on the live site. Prices still work.
+
+You can also run the backend locally:
 
 ```bash
 cd backend
