@@ -70,8 +70,10 @@ export default function AIRiskPage() {
         <>
           {/* Grade card */}
           <div className="flex items-center gap-4">
-            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-4xl font-bold ${gradeColor(data.risk_grade)}`}>
-              {data.risk_grade}
+            {/* Grade is one letter A-F. Without AI it is "Unknown", which does not fit the box, so show "?" */}
+            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center text-4xl font-bold shrink-0 ${
+              data.risk_grade?.length === 1 ? gradeColor(data.risk_grade) : 'text-gray-400 bg-gray-400/10'}`}>
+              {data.risk_grade?.length === 1 ? data.risk_grade : '?'}
             </div>
             <div>
               <p className="text-white text-xl font-bold">{data.ticker} Risk Grade</p>

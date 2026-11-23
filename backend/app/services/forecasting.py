@@ -94,7 +94,14 @@ def get_forecast(ticker: str, horizon: int = 30) -> ForecastResponse:
             model="AI (key not configured — set ANTHROPIC_API_KEY)",
             historical=historical,
             forecast=forecast_pts,
-            metrics={},
+            # Without AI the target is the current price, so the page still shows real numbers
+            metrics={
+                "current_price":     round(current_price, 2),
+                "target_price":      round(current_price, 2),
+                "expected_move_pct": 0.0,
+                "confidence":        0,
+                "trend":             "Unknown",
+            },
             ai_commentary={
                 "commentary": "Set ANTHROPIC_API_KEY in backend/.env to enable AI forecasting.",
                 "confidence": 0,

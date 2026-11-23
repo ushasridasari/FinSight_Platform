@@ -113,6 +113,7 @@ def portfolio_valuation(portfolio_id: int, db: Session = Depends(get_db), user: 
             total_value += current_value
             total_cost += cost_basis
             breakdown.append({
+                "id": h.id,
                 "ticker": h.ticker,
                 "shares": h.shares,
                 "avg_cost": h.avg_cost,
@@ -125,7 +126,7 @@ def portfolio_valuation(portfolio_id: int, db: Session = Depends(get_db), user: 
                 "sector": h.sector or q.sector,
             })
         except Exception:
-            breakdown.append({"ticker": h.ticker, "error": "Failed to fetch price"})
+            breakdown.append({"id": h.id, "ticker": h.ticker, "error": "Failed to fetch price"})
 
     for item in breakdown:
         if total_value > 0 and "current_value" in item:
