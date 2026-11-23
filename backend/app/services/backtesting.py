@@ -239,7 +239,8 @@ def _compute_metrics(
 
     ann_return = ((final_value / initial_capital) ** (1 / max(period_years, 0.1)) - 1) * 100
     ann_vol    = float(returns.std() * np.sqrt(TRADING_DAYS) * 100)
-    sharpe     = (ann_return / 100 - 0.05) / (ann_vol / 100 + 1e-9)
+    # No trades or flat equity gives zero volatility, so Sharpe has no meaning there
+    sharpe     = (ann_return / 100 - 0.05) / (ann_vol / 100) if ann_vol > 1e-6 else 0.0
 
     # Max drawdown
     arr = np.array(strat_values)
